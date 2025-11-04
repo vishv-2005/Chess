@@ -7,6 +7,8 @@ import 'package:chess/core/moves/move_executor.dart';
 import 'package:chess/core/game_state/game_state_manager.dart';
 import 'package:chess/utils/board_utils.dart';
 import 'package:chess/ui/themes/app_theme.dart';
+import 'package:chess/ui/components/promotion_dialog.dart';
+import 'package:chess/ui/components/piece.dart';
 
 class GameBoard extends StatefulWidget {
   const GameBoard({super.key});
@@ -27,6 +29,11 @@ class _GameBoardState extends State<GameBoard> {
 
   // USER SELECTED PIECE
   void pieceSelected(int row, int col) {
+    // Don't allow any moves if game is over
+    if (boardState.gameOver) {
+      return;
+    }
+    
     setState(() {
       // No piece has been selected yet, this is the first selection
       if (boardState.selectedPiece == null && boardState.board[row][col] != null) {
@@ -55,14 +62,35 @@ class _GameBoardState extends State<GameBoard> {
   }
 
   // MOVE PIECE
-  void movePiece(int newRow, int newCol) {
-    MoveExecutor.executeMove(
+  void movePiece(int newRow, int newCol) async {
+    bool needsPromotion = MoveExecutor.executeMove(
       boardState.selectedRow,
       boardState.selectedCol,
       newRow,
       newCol,
       boardState,
     );
+
+    // If pawn promotion is needed, show dialog
+    if (needsPromotion) {
+      setState(() {});
+      
+      // Show promotion dialog
+      ChessPieceType? promotionType = await showDialog<ChessPieceType>(
+        context: context,
+        builder: (context) => PromotionDialog(
+          isWhite: boardState.board[newRow][newCol]?.isWhite ?? false,
+        ),
+      );
+
+      // Apply promotion (default to queen if dialog was dismissed)
+      if (promotionType != null) {
+        MoveExecutor.applyPromotion(newRow, newCol, promotionType, boardState);
+      } else {
+        // If dialog was dismissed, default to queen
+        MoveExecutor.applyPromotion(newRow, newCol, ChessPieceType.queen, boardState);
+      }
+    }
 
     // see if any kings are under attack
     GameStateManager.updateCheckStatus(boardState);
@@ -71,10 +99,35 @@ class _GameBoardState extends State<GameBoard> {
 
     // check if it's checkmate
     if (GameStateManager.isCheckmate(boardState)) {
+      // Set game over flag and determine winner
+      // isCheckmate checks the player whose turn it is now (the one who just received the move)
+      // If checkmate is true, that player is checkmated
+      // The winner is the player who just moved (the opposite of current turn)
+      boardState.gameOver = true;
+      boardState.winnerIsWhite = !boardState.isWhiteTurn; // Winner is the player who just moved
+      
+      // Clear any selected piece
+      boardState.selectedPiece = null;
+      boardState.selectedRow = -1;
+      boardState.selectedCol = -1;
+      boardState.validMoves = [];
+      
+      setState(() {});
+      
+      // Show winner dialog
+      String winnerColor = boardState.winnerIsWhite! ? "White" : "Black";
       showDialog(
         context: context,
+        barrierDismissible: false, // Prevent dismissing the dialog
         builder: (context) => AlertDialog(
-          title: const Text("CHECK MATE"),
+          title: const Text("CHECKMATE!"),
+          content: Text(
+            "$winnerColor won!",
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           actions: [
             // play the game again
             TextButton(
@@ -92,6 +145,8 @@ class _GameBoardState extends State<GameBoard> {
     Navigator.pop(context);
     final initialBoard = BoardInitializer.initializeBoard();
     boardState = BoardState(board: initialBoard);
+    boardState.gameOver = false;
+    boardState.winnerIsWhite = null;
     setState(() {});
   }
 
@@ -118,7 +173,18 @@ class _GameBoardState extends State<GameBoard> {
           ),
 
           // GAME STATUS
-          Text(boardState.checkStatus ? "CHECK!" : ""),
+          Text(
+            boardState.gameOver
+                ? (boardState.winnerIsWhite != null
+                    ? "${boardState.winnerIsWhite! ? "White" : "Black"} won!"
+                    : "Game Over")
+                : (boardState.checkStatus ? "CHECK!" : ""),
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: boardState.gameOver ? Colors.red : Colors.black,
+            ),
+          ),
 
           // CHESS BOARD
           Expanded(

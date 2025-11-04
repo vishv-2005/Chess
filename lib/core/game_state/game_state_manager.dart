@@ -8,9 +8,10 @@ import 'package:chess/core/special_moves/castling.dart';
 /// Manages overall game state and coordinates game flow
 class GameStateManager {
   /// Update check status after a move
+  /// Checks if the player whose turn it is now (the one who just received the move) is in check
   static void updateCheckStatus(BoardState boardState) {
     boardState.checkStatus = CheckDetector.isKingInCheck(
-      !boardState.isWhiteTurn,
+      boardState.isWhiteTurn,
       boardState.board,
       boardState.whiteKingPosition,
       boardState.blackKingPosition,
@@ -77,9 +78,10 @@ class GameStateManager {
   }
 
   /// Check if game is in checkmate
+  /// Checks if the player whose turn it is now (the one who just received the move) is in checkmate
   static bool isCheckmate(BoardState boardState) {
     return CheckmateDetector.isCheckmate(
-      !boardState.isWhiteTurn,
+      boardState.isWhiteTurn,
       boardState.board,
       boardState.whiteKingPosition,
       boardState.blackKingPosition,

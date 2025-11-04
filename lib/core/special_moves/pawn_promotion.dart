@@ -1,7 +1,6 @@
 import 'package:chess/ui/components/piece.dart';
 
 /// Pawn promotion logic
-/// TODO: To be implemented
 class PawnPromotion {
   /// Check if a pawn should be promoted (reached the 8th rank)
   static bool shouldPromote(int row, ChessPiece piece) {
@@ -14,8 +13,7 @@ class PawnPromotion {
     return false;
   }
 
-  /// Promote pawn to a chosen piece
-  /// TODO: Implement UI for piece selection (Queen, Rook, Bishop, Knight)
+  /// Promote pawn to a chosen piece (Queen, Rook, Bishop, or Knight)
   static ChessPiece promotePawn(ChessPiece pawn, ChessPieceType promotionType) {
     String imagePath;
     String colorPrefix = pawn.isWhite ? 'w' : 'b';

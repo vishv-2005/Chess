@@ -1,11 +1,13 @@
 import 'package:chess/ui/components/piece.dart';
 import 'package:chess/core/board/board_state.dart';
 import 'package:chess/core/special_moves/castling.dart';
+import 'package:chess/core/special_moves/pawn_promotion.dart';
 
 /// Executes moves on the chess board
 class MoveExecutor {
   /// Execute a move on the board
-  static void executeMove(
+  /// Returns true if pawn promotion is needed, false otherwise
+  static bool executeMove(
     int startRow,
     int startCol,
     int endRow,
@@ -75,13 +77,40 @@ class MoveExecutor {
     boardState.board[endRow][endCol] = boardState.selectedPiece;
     boardState.board[startRow][startCol] = null;
 
+    // Check for pawn promotion (before clearing selection)
+    bool needsPromotion = PawnPromotion.shouldPromote(endRow, boardState.selectedPiece!);
+    
     // clear selection
     boardState.selectedPiece = null;
     boardState.selectedRow = -1;
     boardState.selectedCol = -1;
     boardState.validMoves = [];
 
-    // change turns
+    // change turns (only if not promoting, promotion will handle turn change)
+    if (!needsPromotion) {
+      boardState.isWhiteTurn = !boardState.isWhiteTurn;
+    }
+    
+    // Return whether promotion is needed
+    return needsPromotion;
+  }
+
+  /// Apply promotion to a pawn at the given position
+  static void applyPromotion(
+    int row,
+    int col,
+    ChessPieceType promotionType,
+    BoardState boardState,
+  ) {
+    if (boardState.board[row][col] == null) return;
+    
+    ChessPiece? pawn = boardState.board[row][col];
+    if (pawn == null || pawn.type != ChessPieceType.pawn) return;
+    
+    // Replace pawn with promoted piece
+    boardState.board[row][col] = PawnPromotion.promotePawn(pawn, promotionType);
+    
+    // Change turns after promotion
     boardState.isWhiteTurn = !boardState.isWhiteTurn;
   }
 }

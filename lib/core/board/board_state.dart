@@ -32,6 +32,10 @@ class BoardState {
   List<int> blackKingPosition = [0, 4];
   bool checkStatus = false;
 
+  // Game over state
+  bool gameOver = false;
+  bool? winnerIsWhite; // null if game not over, true if white won, false if black won
+
   // Castling conditions
   bool whiteKingMoved = false;
   bool blackKingMoved = false;
@@ -54,6 +58,8 @@ class BoardState {
     whiteKingPosition = [7, 4];
     blackKingPosition = [0, 4];
     checkStatus = false;
+    gameOver = false;
+    winnerIsWhite = null;
     whiteKingMoved = false;
     blackKingMoved = false;
     whiteLeftRookMoved = false;
