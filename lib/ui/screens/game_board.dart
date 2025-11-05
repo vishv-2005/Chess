@@ -120,19 +120,47 @@ class _GameBoardState extends State<GameBoard> {
         context: context,
         barrierDismissible: false, // Prevent dismissing the dialog
         builder: (context) => AlertDialog(
-          title: const Text("CHECKMATE!"),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          backgroundColor: AppTheme.primaryColor,
+          title: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.celebration, color: AppTheme.accentColor, size: 32),
+              SizedBox(width: 12),
+              Text(
+                "CHECKMATE!",
+                style: TextStyle(
+                  color: AppTheme.textColorLight,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
           content: Text(
             "$winnerColor won!",
             style: const TextStyle(
-              fontSize: 18,
+              fontSize: 20,
               fontWeight: FontWeight.bold,
+              color: AppTheme.textColorLight,
             ),
           ),
           actions: [
-            // play the game again
             TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                "Close",
+                style: TextStyle(color: AppTheme.textColorLight),
+              ),
+            ),
+            ElevatedButton(
               onPressed: resetGame,
-              child: const Text("Play again"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.accentColor,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text("Play Again"),
             ),
           ],
         ),
@@ -150,94 +178,303 @@ class _GameBoardState extends State<GameBoard> {
     setState(() {});
   }
 
+  String _getCoordinateLabel(int row, int col) {
+    // Show coordinates on the edges
+    String label = '';
+    if (row == 7) {
+      // Bottom row - show file letters (a-h)
+      label = String.fromCharCode(97 + col); // 'a' to 'h'
+    }
+    if (col == 0) {
+      // Left column - show rank numbers (1-8)
+      label = '${8 - row}';
+    }
+    return label;
+  }
+
+  bool _isKingInCheck(int row, int col) {
+    if (boardState.board[row][col]?.type != ChessPieceType.king) {
+      return false;
+    }
+    return boardState.checkStatus && 
+           boardState.board[row][col]?.isWhite == boardState.isWhiteTurn;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Chess"), centerTitle: true),
-      backgroundColor: AppTheme.foregroundColor,
-      body: Column(
-        children: [
-          // WHITE PIECE TAKEN
-          Expanded(
-            child: GridView.builder(
-              itemCount: boardState.whitePiecesTaken.length,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 8,
-              ),
-              itemBuilder: (context, index) => DeadPiece(
-                imagePath: boardState.whitePiecesTaken[index].imagePath,
-                isWhite: true,
-              ),
-            ),
-          ),
-
-          // GAME STATUS
-          Text(
-            boardState.gameOver
-                ? (boardState.winnerIsWhite != null
-                    ? "${boardState.winnerIsWhite! ? "White" : "Black"} won!"
-                    : "Game Over")
-                : (boardState.checkStatus ? "CHECK!" : ""),
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: boardState.gameOver ? Colors.red : Colors.black,
-            ),
-          ),
-
-          // CHESS BOARD
-          Expanded(
-            flex: 3,
-            child: GridView.builder(
-              itemCount: 8 * 8,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 8,
-              ),
-              itemBuilder: (context, index) {
-                // get the row and col position of this square
-                int row = index ~/ 8;
-                int col = index % 8;
-
-                bool isSelected = boardState.selectedRow == row && boardState.selectedCol == col;
-
-                // check if this square is a valid move
-                bool isValidMove = false;
-                for (var position in boardState.validMoves) {
-                  // compare row and col
-                  if (position[0] == row && position[1] == col) {
-                    isValidMove = true;
-                  }
-                }
-                return Square(
-                  isWhite: isWhite(index),
-                  piece: boardState.board[row][col],
-                  isSelected: isSelected,
-                  isValidMove: isValidMove,
-                  onTap: () {
-                    pieceSelected(row, col);
-                  },
-                );
-              },
-            ),
-          ),
-
-          // BLACK PIECE TAKEN
-          Expanded(
-            child: GridView.builder(
-              itemCount: boardState.blackPiecesTaken.length,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 8,
-              ),
-              itemBuilder: (context, index) => DeadPiece(
-                imagePath: boardState.blackPiecesTaken[index].imagePath,
-                isWhite: false,
-              ),
-            ),
+      appBar: AppBar(
+        title: const Text(
+          "Chess",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        centerTitle: true,
+        backgroundColor: AppTheme.primaryColor,
+        foregroundColor: AppTheme.textColorLight,
+        elevation: 2,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Reset Game',
+            onPressed: boardState.gameOver ? null : () {
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Reset Game'),
+                  content: const Text('Are you sure you want to reset the game?'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancel'),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        resetGame();
+                      },
+                      child: const Text('Reset'),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
         ],
+      ),
+      backgroundColor: AppTheme.backgroundColor,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // BLACK PIECES TAKEN (Top)
+            Container(
+              height: 60,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                color: AppTheme.primaryColor.withOpacity(0.3),
+                border: Border(
+                  bottom: BorderSide(
+                    color: AppTheme.primaryColor.withOpacity(0.5),
+                    width: 1,
+                  ),
+                ),
+              ),
+              child: boardState.blackPiecesTaken.isEmpty
+                  ? const Center(
+                      child: Text(
+                        'Black Captured',
+                        style: TextStyle(
+                          color: AppTheme.textColorLight,
+                          fontSize: 12,
+                        ),
+                      ),
+                    )
+                  : GridView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: boardState.blackPiecesTaken.length,
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 1,
+                        mainAxisSpacing: 4,
+                      ),
+                      itemBuilder: (context, index) => DeadPiece(
+                        imagePath: boardState.blackPiecesTaken[index].imagePath,
+                        isWhite: false,
+                      ),
+                    ),
+            ),
+
+            // GAME STATUS
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (boardState.gameOver)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: AppTheme.checkSquare,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.celebration, color: Colors.white),
+                          const SizedBox(width: 8),
+                          Text(
+                            boardState.winnerIsWhite != null
+                                ? "${boardState.winnerIsWhite! ? "White" : "Black"} Wins!"
+                                : "Game Over",
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else if (boardState.checkStatus)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: AppTheme.checkSquare.withOpacity(0.8),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.warning, color: Colors.white),
+                          SizedBox(width: 8),
+                          Text(
+                            "CHECK!",
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryColor.withOpacity(0.5),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            boardState.isWhiteTurn
+                                ? Icons.circle
+                                : Icons.circle_outlined,
+                            color: boardState.isWhiteTurn
+                                ? Colors.white
+                                : Colors.black,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            "${boardState.isWhiteTurn ? "White" : "Black"}'s Turn",
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.textColorLight,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+
+            // CHESS BOARD
+            Expanded(
+              child: Container(
+                margin: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppTheme.textColor,
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 10,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.all(8),
+                child: GridView.builder(
+                  itemCount: 8 * 8,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 8,
+                  ),
+                  itemBuilder: (context, index) {
+                    // get the row and col position of this square
+                    int row = index ~/ 8;
+                    int col = index % 8;
+
+                    bool isSelected =
+                        boardState.selectedRow == row &&
+                        boardState.selectedCol == col;
+
+                    // check if this square is a valid move
+                    bool isValidMove = false;
+                    for (var position in boardState.validMoves) {
+                      // compare row and col
+                      if (position[0] == row && position[1] == col) {
+                        isValidMove = true;
+                      }
+                    }
+
+                    String coordinateLabel = _getCoordinateLabel(row, col);
+                    bool isInCheck = _isKingInCheck(row, col);
+
+                    return Square(
+                      isWhite: isWhite(index),
+                      piece: boardState.board[row][col],
+                      isSelected: isSelected,
+                      isValidMove: isValidMove,
+                      coordinateLabel: coordinateLabel.isNotEmpty
+                          ? coordinateLabel
+                          : null,
+                      isInCheck: isInCheck,
+                      onTap: () {
+                        pieceSelected(row, col);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ),
+
+            // WHITE PIECES TAKEN (Bottom)
+            Container(
+              height: 60,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                color: AppTheme.primaryColor.withOpacity(0.3),
+                border: Border(
+                  top: BorderSide(
+                    color: AppTheme.primaryColor.withOpacity(0.5),
+                    width: 1,
+                  ),
+                ),
+              ),
+              child: boardState.whitePiecesTaken.isEmpty
+                  ? const Center(
+                      child: Text(
+                        'White Captured',
+                        style: TextStyle(
+                          color: AppTheme.textColorLight,
+                          fontSize: 12,
+                        ),
+                      ),
+                    )
+                  : GridView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: boardState.whitePiecesTaken.length,
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 1,
+                        mainAxisSpacing: 4,
+                      ),
+                      itemBuilder: (context, index) => DeadPiece(
+                        imagePath: boardState.whitePiecesTaken[index].imagePath,
+                        isWhite: true,
+                      ),
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }

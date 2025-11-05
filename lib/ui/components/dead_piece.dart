@@ -8,7 +8,16 @@ class DeadPiece extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Opacity(opacity: 0.7, child: SvgPicture.asset(imagePath));
+    return Container(
+      padding: const EdgeInsets.all(2),
+      child: Opacity(
+        opacity: 0.6,
+        child: SvgPicture.asset(
+          imagePath,
+          fit: BoxFit.contain,
+        ),
+      ),
+    );
   }
 }
 
