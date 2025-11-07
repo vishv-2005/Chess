@@ -56,7 +56,10 @@ class MenuScreen extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const GameBoard(),
+                          builder: (context) => const GameBoard(
+                            playVsComputer: true,
+                            computerIsWhite: false,
+                          ),
                         ),
                       );
                     },

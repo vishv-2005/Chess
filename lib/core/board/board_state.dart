@@ -48,6 +48,10 @@ class BoardState {
   List<int>? lastMoveFrom;
   List<int>? lastMoveTo;
 
+  // Play vs computer settings
+  bool playVsComputer = false;
+  bool computerIsWhite = false;
+
   // Constructor: accept named param 'board' for compatibility with callers
   BoardState({List<List<ChessPiece?>>? board})
       : board = board ?? BoardInitializer.initializeBoard();

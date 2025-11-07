@@ -9,9 +9,17 @@ import 'package:chess/utils/board_utils.dart';
 import 'package:chess/ui/themes/app_theme.dart';
 import 'package:chess/ui/components/promotion_dialog.dart';
 import 'package:chess/ui/components/piece.dart';
+import 'package:chess/core/engine/stockfish_service.dart';
 
 class GameBoard extends StatefulWidget {
-  const GameBoard({super.key});
+  final bool playVsComputer;
+  final bool computerIsWhite;
+
+  const GameBoard({
+    super.key,
+    this.playVsComputer = false,
+    this.computerIsWhite = false,
+  });
 
   @override
   State<GameBoard> createState() => _GameBoardState();
@@ -19,12 +27,22 @@ class GameBoard extends StatefulWidget {
 
 class _GameBoardState extends State<GameBoard> {
   late BoardState boardState;
+  final StockfishService _engine = StockfishService();
 
   @override
   void initState() {
     super.initState();
     final initialBoard = BoardInitializer.initializeBoard();
     boardState = BoardState(board: initialBoard);
+    boardState.playVsComputer = widget.playVsComputer;
+    boardState.computerIsWhite = widget.computerIsWhite;
+
+    if (boardState.playVsComputer &&
+        boardState.computerIsWhite == boardState.isWhiteTurn) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await _playEngineMove();
+      });
+    }
   }
 
   // USER SELECTED PIECE
@@ -173,16 +191,58 @@ class _GameBoardState extends State<GameBoard> {
         ),
       );
     }
+
+    // If playing vs computer and it's now engine's turn, trigger engine move
+    if (boardState.playVsComputer && !boardState.gameOver) {
+      bool engineTurnIsWhite = boardState.isWhiteTurn;
+      if (engineTurnIsWhite == boardState.computerIsWhite) {
+        await _playEngineMove();
+      }
+    }
   }
 
   // RESET THE GAME
   void resetGame() {
     Navigator.pop(context);
     final initialBoard = BoardInitializer.initializeBoard();
+    final bool wasComputer = boardState.playVsComputer;
+    final bool computerWhite = boardState.computerIsWhite;
     boardState = BoardState(board: initialBoard);
     boardState.gameOver = false;
     boardState.winnerIsWhite = null;
+    boardState.playVsComputer = wasComputer;
+    boardState.computerIsWhite = computerWhite;
     setState(() {});
+  }
+
+  Future<void> _playEngineMove() async {
+    try {
+      // Ask engine for best move
+      final uci = await _engine.getBestMove(boardState, movetimeMs: 800);
+      if (uci == null || uci.length < 4) return;
+      final fromSq = uci.substring(0, 2);
+      final toSq = uci.substring(2, 4);
+      final from = StockfishService.uciSquareToRowCol(fromSq);
+      final to = StockfishService.uciSquareToRowCol(toSq);
+
+      // Handle optional promotion character (e.g., e7e8q)
+      bool needsPromotion = MoveExecutor.executeMove(
+        from[0],
+        from[1],
+        to[0],
+        to[1],
+        boardState,
+      );
+      if (needsPromotion) {
+        // Default to queen for engine promotions
+        MoveExecutor.applyPromotion(to[0], to[1], ChessPieceType.queen, boardState);
+      }
+
+      GameStateManager.updateCheckStatus(boardState);
+      setState(() {});
+    } catch (_) {
+      // ignore engine errors for now
+    }
   }
 
   String _getCoordinateLabel(int row, int col) {
@@ -220,6 +280,21 @@ class _GameBoardState extends State<GameBoard> {
         foregroundColor: AppTheme.textColorLight,
         elevation: 2,
         actions: [
+          IconButton(
+            icon: Icon(boardState.playVsComputer ? Icons.computer : Icons.computer_outlined),
+            tooltip: 'Play vs Computer',
+            onPressed: () async {
+              setState(() {
+                boardState.playVsComputer = !boardState.playVsComputer;
+                // Default: computer plays Black
+                boardState.computerIsWhite = false;
+              });
+              // If computer plays white and it's white to move, let engine move immediately
+              if (boardState.playVsComputer && boardState.computerIsWhite == boardState.isWhiteTurn) {
+                await _playEngineMove();
+              }
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Reset Game',
