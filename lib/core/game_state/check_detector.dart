@@ -1,41 +1,39 @@
 import 'package:chess/ui/components/piece.dart';
-import 'package:chess/core/moves/move_validator.dart';
+import 'package:chess/core/moves/move_calculator.dart';
+import 'package:chess/core/board/board_state.dart';
 
-/// Detects if a king is in check
+/// Detects whether a player's king is in check
 class CheckDetector {
-  /// Check if the king of the given color is in check
-  static bool isKingInCheck(
-    bool isWhiteKing,
-    List<List<ChessPiece?>> board,
-    List<int> whiteKingPosition,
-    List<int> blackKingPosition,
-  ) {
-    // get the position of the king
-    List<int> kingPosition = isWhiteKing ? whiteKingPosition : blackKingPosition;
+  /// Returns true if the king of `isWhiteKing` is currently in check.
+  static bool isKingInCheck(bool isWhiteKing, BoardState boardState) {
+    List<List<ChessPiece?>> board = boardState.board;
+    List<int> kingPos =
+    isWhiteKing ? boardState.whiteKingPosition : boardState.blackKingPosition;
 
-    // check if any enemy piece can attack the king
-    for (int i = 0; i < 8; i++) {
-      for (int j = 0; j < 8; j++) {
-        // skip empty squares and pieces of the same color
-        if (board[i][j] == null || board[i][j]!.isWhite == isWhiteKing) {
-          continue;
-        }
+    // If king is missing (corrupted board)
+    if (kingPos[0] < 0 || kingPos[1] < 0) return false;
 
-        List<List<int>> pieceValidMoves = MoveValidator.calculateRealValidMoves(
-          i,
-          j,
-          board[i][j],
-          false, // no check simulation needed here
+    // Loop through all squares and find enemy pieces
+    for (int row = 0; row < 8; row++) {
+      for (int col = 0; col < 8; col++) {
+        ChessPiece? piece = board[row][col];
+        if (piece == null) continue;
+        // Skip friendly pieces
+        if (piece.isWhite == isWhiteKing) continue;
+
+        // Get raw moves for that enemy piece
+        List<List<int>> moves = MoveCalculator.calculateRawValidMoves(
+          row,
+          col,
+          piece,
           board,
-          whiteKingPosition,
-          blackKingPosition,
         );
 
-        // check if the king's position is in this piece's valid moves
-        if (pieceValidMoves.any(
-          (move) => move[0] == kingPosition[0] && move[1] == kingPosition[1],
-        )) {
-          return true;
+        // If any of those moves attacks the king position, it’s check
+        for (var move in moves) {
+          if (move[0] == kingPos[0] && move[1] == kingPos[1]) {
+            return true;
+          }
         }
       }
     }
@@ -43,4 +41,3 @@ class CheckDetector {
     return false;
   }
 }
-

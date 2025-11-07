@@ -11,6 +11,8 @@ class Square extends StatelessWidget {
   final void Function()? onTap;
   final String? coordinateLabel;
   final bool isInCheck;
+  final bool isLastFrom;
+  final bool isLastTo;
 
   const Square({
     super.key,
@@ -21,6 +23,8 @@ class Square extends StatelessWidget {
     required this.onTap,
     this.coordinateLabel,
     this.isInCheck = false,
+    this.isLastFrom = false,
+    this.isLastTo = false,
   });
 
   @override
@@ -30,6 +34,8 @@ class Square extends StatelessWidget {
     // Determine base square color
     if (isSelected) {
       squareColor = AppTheme.selectedSquare;
+    } else if (isLastFrom || isLastTo) {
+      squareColor = AppTheme.lastMoveSquare.withOpacity(0.6);
     } else {
       squareColor = isWhite ? AppTheme.lightSquare : AppTheme.darkSquare;
     }

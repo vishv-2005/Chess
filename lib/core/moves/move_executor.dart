@@ -2,69 +2,78 @@ import 'package:chess/ui/components/piece.dart';
 import 'package:chess/core/board/board_state.dart';
 import 'package:chess/core/special_moves/castling.dart';
 import 'package:chess/core/special_moves/pawn_promotion.dart';
+import 'package:chess/core/special_moves/en_passant.dart';
 
-/// Executes moves on the chess board
 class MoveExecutor {
-  /// Execute a move on the board
-  /// Returns true if pawn promotion is needed, false otherwise
   static bool executeMove(
-    int startRow,
-    int startCol,
-    int endRow,
-    int endCol,
-    BoardState boardState,
-  ) {
-    // if the new spot has an enemy piece, add it to captured pieces
-    if (boardState.board[endRow][endCol] != null) {
-      var capturedPiece = boardState.board[endRow][endCol];
-      if (capturedPiece!.isWhite) {
-        boardState.whitePiecesTaken.add(capturedPiece);
-      } else {
-        boardState.blackPiecesTaken.add(capturedPiece);
+      int startRow,
+      int startCol,
+      int endRow,
+      int endCol,
+      BoardState boardState,
+      ) {
+    ChessPiece? movingPiece = boardState.board[startRow][startCol];
+    if (movingPiece == null) return false;
+
+    // Track capture (normal capture) before moving
+    ChessPiece? targetPiece = boardState.board[endRow][endCol];
+
+    bool wasEnPassant = EnPassant.isEnPassantCapture(
+      startRow,
+      startCol,
+      endRow,
+      endCol,
+      boardState,
+    );
+
+    if (wasEnPassant) {
+      // Collect captured pawn
+      if (boardState.enPassantPawn != null) {
+        final capPos = boardState.enPassantPawn!;
+        final capturedPawn = boardState.board[capPos[0]][capPos[1]];
+        if (capturedPawn != null) {
+          if (capturedPawn.isWhite) {
+            boardState.whitePiecesTaken.add(capturedPawn);
+          } else {
+            boardState.blackPiecesTaken.add(capturedPawn);
+          }
+        }
+      }
+      EnPassant.performEnPassantCapture(startRow, startCol, endRow, endCol, boardState);
+    } else {
+      // If target square had an opponent piece, collect it
+      if (targetPiece != null && targetPiece.isWhite != movingPiece.isWhite) {
+        if (targetPiece.isWhite) {
+          boardState.whitePiecesTaken.add(targetPiece);
+        } else {
+          boardState.blackPiecesTaken.add(targetPiece);
+        }
+      }
+      // Move the moving piece
+      boardState.board[endRow][endCol] = movingPiece;
+      boardState.board[startRow][startCol] = null;
+
+      // If this was a king move, handle the rook shift now that king has landed
+      if (movingPiece.type == ChessPieceType.king) {
+        Castling.applyCastlingIfNeeded(startRow, startCol, endRow, endCol, boardState);
       }
     }
 
-    // check if the piece being moved is the king
-    if (boardState.selectedPiece!.type == ChessPieceType.king) {
-      // update the appropriate king position
-      if (boardState.selectedPiece!.isWhite) {
-        boardState.whiteKingMoved = true;
-
-        // Check for castling
-        if (Castling.isCastlingMove(startRow, startCol, endRow, endCol)) {
-          Castling.executeCastling(
-            startRow,
-            startCol,
-            endRow,
-            endCol,
-            boardState.board,
-            boardState,
-          );
-        }
-
+    // Update moved flags
+    ChessPiece? placed = boardState.board[endRow][endCol];
+    if (placed != null && placed.type == ChessPieceType.king) {
+      if (placed.isWhite) {
         boardState.whiteKingPosition = [endRow, endCol];
+        boardState.whiteKingMoved = true;
       } else {
-        boardState.blackKingMoved = true;
-
-        // Check for castling
-        if (Castling.isCastlingMove(startRow, startCol, endRow, endCol)) {
-          Castling.executeCastling(
-            startRow,
-            startCol,
-            endRow,
-            endCol,
-            boardState.board,
-            boardState,
-          );
-        }
-
         boardState.blackKingPosition = [endRow, endCol];
+        boardState.blackKingMoved = true;
       }
     }
 
-    // Track rook movements for castling eligibility
-    if (boardState.selectedPiece!.type == ChessPieceType.rook) {
-      if (boardState.selectedPiece!.isWhite) {
+    // If a rook moved from its original corner, set rook-moved flags
+    if (movingPiece.type == ChessPieceType.rook) {
+      if (movingPiece.isWhite) {
         if (startRow == 7 && startCol == 0) boardState.whiteLeftRookMoved = true;
         if (startRow == 7 && startCol == 7) boardState.whiteRightRookMoved = true;
       } else {
@@ -73,45 +82,44 @@ class MoveExecutor {
       }
     }
 
-    // move the piece and clear the old spot
-    boardState.board[endRow][endCol] = boardState.selectedPiece;
-    boardState.board[startRow][startCol] = null;
-
-    // Check for pawn promotion (before clearing selection)
-    bool needsPromotion = PawnPromotion.shouldPromote(endRow, boardState.selectedPiece!);
-    
-    // clear selection
-    boardState.selectedPiece = null;
-    boardState.selectedRow = -1;
-    boardState.selectedCol = -1;
-    boardState.validMoves = [];
-
-    // change turns (only if not promoting, promotion will handle turn change)
-    if (!needsPromotion) {
-      boardState.isWhiteTurn = !boardState.isWhiteTurn;
+    // En-passant setup
+    boardState.clearEnPassant();
+    if (movingPiece.type == ChessPieceType.pawn && (startRow - endRow).abs() == 2) {
+      var target = EnPassant.computeEnPassantTargetForTwoSquarePawnMove(
+          startRow, endRow, endCol, movingPiece);
+      if (target != null) {
+        boardState.enPassantTarget = target;
+        boardState.enPassantPawn = [endRow, endCol];
+      }
     }
-    
-    // Return whether promotion is needed
+
+    // Record last move to enhance UX
+    boardState.lastMoveFrom = [startRow, startCol];
+    boardState.lastMoveTo = [endRow, endCol];
+
+    bool needsPromotion = false;
+    if (placed != null && placed.type == ChessPieceType.pawn) {
+      if ((placed.isWhite && endRow == 0) || (!placed.isWhite && endRow == 7)) {
+        needsPromotion = true;
+      }
+    }
+
+    boardState.selectedPiece = null;
+    boardState.validMoves = [];
+    if (!needsPromotion) boardState.isWhiteTurn = !boardState.isWhiteTurn;
+
     return needsPromotion;
   }
 
-  /// Apply promotion to a pawn at the given position
   static void applyPromotion(
-    int row,
-    int col,
-    ChessPieceType promotionType,
-    BoardState boardState,
-  ) {
-    if (boardState.board[row][col] == null) return;
-    
-    ChessPiece? pawn = boardState.board[row][col];
+      int row,
+      int col,
+      ChessPieceType type,
+      BoardState boardState,
+      ) {
+    var pawn = boardState.board[row][col];
     if (pawn == null || pawn.type != ChessPieceType.pawn) return;
-    
-    // Replace pawn with promoted piece
-    boardState.board[row][col] = PawnPromotion.promotePawn(pawn, promotionType);
-    
-    // Change turns after promotion
+    boardState.board[row][col] = PawnPromotion.promotePawn(pawn, type);
     boardState.isWhiteTurn = !boardState.isWhiteTurn;
   }
 }
-

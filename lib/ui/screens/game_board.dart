@@ -57,7 +57,14 @@ class _GameBoardState extends State<GameBoard> {
       }
 
       // if a piece is selected, calculate its valid moves
-      GameStateManager.calculateValidMoves(boardState);
+      boardState.validMoves = GameStateManager.getValidMoves(
+        boardState.selectedRow,
+        boardState.selectedCol,
+        boardState.selectedPiece,
+        boardState,
+      );
+
+
     });
   }
 
@@ -418,6 +425,13 @@ class _GameBoardState extends State<GameBoard> {
                     String coordinateLabel = _getCoordinateLabel(row, col);
                     bool isInCheck = _isKingInCheck(row, col);
 
+                    bool isLastFrom = boardState.lastMoveFrom != null &&
+                        boardState.lastMoveFrom![0] == row &&
+                        boardState.lastMoveFrom![1] == col;
+                    bool isLastTo = boardState.lastMoveTo != null &&
+                        boardState.lastMoveTo![0] == row &&
+                        boardState.lastMoveTo![1] == col;
+
                     return Square(
                       isWhite: isWhite(index),
                       piece: boardState.board[row][col],
@@ -427,6 +441,8 @@ class _GameBoardState extends State<GameBoard> {
                           ? coordinateLabel
                           : null,
                       isInCheck: isInCheck,
+                      isLastFrom: isLastFrom,
+                      isLastTo: isLastTo,
                       onTap: () {
                         pieceSelected(row, col);
                       },

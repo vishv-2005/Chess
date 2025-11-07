@@ -1,54 +1,69 @@
 import 'package:chess/ui/components/piece.dart';
-import 'package:chess/core/game_state/check_detector.dart';
 import 'package:chess/core/moves/move_validator.dart';
+import 'package:chess/core/game_state/check_detector.dart';
+import 'package:chess/core/board/board_state.dart';
 
-/// Detects checkmate condition
+/// Detects checkmate and stalemate conditions
 class CheckmateDetector {
-  /// Check if the king of the given color is in checkmate
-  static bool isCheckmate(
-    bool isWhiteKing,
-    List<List<ChessPiece?>> board,
-    List<int> whiteKingPosition,
-    List<int> blackKingPosition,
-  ) {
-    // if the king is not in check, then it's not checkmate
-    if (!CheckDetector.isKingInCheck(
-      isWhiteKing,
-      board,
-      whiteKingPosition,
-      blackKingPosition,
-    )) {
-      return false;
-    }
+  /// Returns true if the player with `isWhiteTurn` is in checkmate
+  static bool isCheckmate(BoardState boardState) {
+    bool isWhiteTurn = boardState.isWhiteTurn;
 
-    // if there is at least one legal move for any of the player's pieces, then it's not checkmate
-    for (int i = 0; i < 8; i++) {
-      for (int j = 0; j < 8; j++) {
-        // skip empty squares and pieces of the opposite color
-        if (board[i][j] == null || board[i][j]!.isWhite != isWhiteKing) {
-          continue;
-        }
+    // If the player isn't even in check, it's not checkmate
+    if (!CheckDetector.isKingInCheck(isWhiteTurn, boardState)) return false;
 
-        List<List<int>> pieceValidMoves = MoveValidator.calculateRealValidMoves(
-          i,
-          j,
-          board[i][j],
-          true, // check simulation needed
-          board,
-          whiteKingPosition,
-          blackKingPosition,
+    // Try every piece for the current player
+    for (int row = 0; row < 8; row++) {
+      for (int col = 0; col < 8; col++) {
+        ChessPiece? piece = boardState.board[row][col];
+        if (piece == null || piece.isWhite != isWhiteTurn) continue;
+
+        List<List<int>> validMoves = MoveValidator.calculateRealValidMoves(
+          row,
+          col,
+          piece,
+          false, // simulate for safety
+          boardState,
         );
 
-        // if this piece has any valid moves, then it's not checkmate
-        if (pieceValidMoves.isNotEmpty) {
+        if (validMoves.isNotEmpty) {
+          // There exists at least one safe move → not checkmate
           return false;
         }
       }
     }
 
-    // if none of the above conditions are met, then there are no legal moves left
-    // it's checkmate!
-    return true;
+    return true; // no legal moves left and in check
+  }
+
+  /// Returns true if the player with `isWhiteTurn` is in stalemate
+  static bool isStalemate(BoardState boardState) {
+    bool isWhiteTurn = boardState.isWhiteTurn;
+
+    // If the player is in check, not stalemate
+    if (CheckDetector.isKingInCheck(isWhiteTurn, boardState)) return false;
+
+    // Try every piece for the current player
+    for (int row = 0; row < 8; row++) {
+      for (int col = 0; col < 8; col++) {
+        ChessPiece? piece = boardState.board[row][col];
+        if (piece == null || piece.isWhite != isWhiteTurn) continue;
+
+        List<List<int>> validMoves = MoveValidator.calculateRealValidMoves(
+          row,
+          col,
+          piece,
+          false,
+          boardState,
+        );
+
+        if (validMoves.isNotEmpty) {
+          // There exists at least one safe move → not stalemate
+          return false;
+        }
+      }
+    }
+
+    return true; // no legal moves and not in check
   }
 }
-
