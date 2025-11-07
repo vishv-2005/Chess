@@ -51,6 +51,7 @@ class BoardState {
   // Play vs computer settings
   bool playVsComputer = false;
   bool computerIsWhite = false;
+  String engineDifficultyId = 'beth';
 
   // Constructor: accept named param 'board' for compatibility with callers
   BoardState({List<List<ChessPiece?>>? board})

@@ -56,11 +56,22 @@ class UciEngine {
   }
 
   /// Ask engine for best move. Returns bestmove token like e2e4 or null on error.
-  Future<String?> go({int movetimeMs = 1000}) async {
-    await send('go movetime $movetimeMs');
+  Future<String?> go({int? movetimeMs, int? depth}) async {
+    String command;
+    int timeoutMs;
+    if (depth != null) {
+      command = 'go depth $depth';
+      timeoutMs = 1000 * depth + 5000;
+    } else {
+      final time = movetimeMs ?? 1000;
+      command = 'go movetime $time';
+      timeoutMs = time + 5000;
+    }
+    await send(command);
     try {
-      final line = await _lines.stream.firstWhere((l) => l.startsWith('bestmove'))
-          .timeout(Duration(milliseconds: movetimeMs + 5000));
+      final line = await _lines.stream
+          .firstWhere((l) => l.startsWith('bestmove'))
+          .timeout(Duration(milliseconds: timeoutMs));
       final parts = line.split(' ');
       if (parts.length >= 2) return parts[1];
       return null;

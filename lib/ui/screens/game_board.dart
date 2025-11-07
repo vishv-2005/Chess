@@ -10,15 +10,18 @@ import 'package:chess/ui/themes/app_theme.dart';
 import 'package:chess/ui/components/promotion_dialog.dart';
 import 'package:chess/ui/components/piece.dart';
 import 'package:chess/core/engine/stockfish_service.dart';
+import 'package:chess/core/engine/engine_difficulty.dart';
 
 class GameBoard extends StatefulWidget {
   final bool playVsComputer;
   final bool computerIsWhite;
+  final String? difficultyId;
 
   const GameBoard({
     super.key,
     this.playVsComputer = false,
     this.computerIsWhite = false,
+    this.difficultyId,
   });
 
   @override
@@ -28,6 +31,8 @@ class GameBoard extends StatefulWidget {
 class _GameBoardState extends State<GameBoard> {
   late BoardState boardState;
   final StockfishService _engine = StockfishService();
+  late EngineDifficulty _difficulty;
+  bool _fallbackNotified = false;
 
   @override
   void initState() {
@@ -36,13 +41,16 @@ class _GameBoardState extends State<GameBoard> {
     boardState = BoardState(board: initialBoard);
     boardState.playVsComputer = widget.playVsComputer;
     boardState.computerIsWhite = widget.computerIsWhite;
+    boardState.engineDifficultyId = widget.difficultyId ?? boardState.engineDifficultyId;
+    _difficulty = EngineDifficulty.byId(boardState.engineDifficultyId);
 
-    if (boardState.playVsComputer &&
-        boardState.computerIsWhite == boardState.isWhiteTurn) {
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _engine.setDifficulty(_difficulty);
+      if (boardState.playVsComputer &&
+          boardState.computerIsWhite == boardState.isWhiteTurn) {
         await _playEngineMove();
-      });
-    }
+      }
+    });
   }
 
   // USER SELECTED PIECE
@@ -207,18 +215,30 @@ class _GameBoardState extends State<GameBoard> {
     final initialBoard = BoardInitializer.initializeBoard();
     final bool wasComputer = boardState.playVsComputer;
     final bool computerWhite = boardState.computerIsWhite;
+    final String difficultyId = boardState.engineDifficultyId;
     boardState = BoardState(board: initialBoard);
     boardState.gameOver = false;
     boardState.winnerIsWhite = null;
     boardState.playVsComputer = wasComputer;
     boardState.computerIsWhite = computerWhite;
+    boardState.engineDifficultyId = difficultyId;
     setState(() {});
   }
 
   Future<void> _playEngineMove() async {
     try {
       // Ask engine for best move
-      final uci = await _engine.getBestMove(boardState, movetimeMs: 800);
+      final uci = await _engine.getBestMove(boardState);
+      if (_engine.isFallbackActive && !_fallbackNotified) {
+        _fallbackNotified = true;
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Using fallback AI. Stockfish binary not found or failed to start.'),
+            ),
+          );
+        }
+      }
       if (uci == null || uci.length < 4) return;
       final fromSq = uci.substring(0, 2);
       final toSq = uci.substring(2, 4);
@@ -291,6 +311,7 @@ class _GameBoardState extends State<GameBoard> {
               });
               // If computer plays white and it's white to move, let engine move immediately
               if (boardState.playVsComputer && boardState.computerIsWhite == boardState.isWhiteTurn) {
+                await _engine.setDifficulty(_difficulty);
                 await _playEngineMove();
               }
             },
@@ -371,6 +392,28 @@ class _GameBoardState extends State<GameBoard> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
+                  if (boardState.playVsComputer)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      margin: const EdgeInsets.only(right: 12),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryColor.withOpacity(0.4),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.computer, size: 16, color: AppTheme.textColorLight),
+                          const SizedBox(width: 6),
+                          Text(
+                            _difficulty.name,
+                            style: const TextStyle(
+                              color: AppTheme.textColorLight,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   if (boardState.gameOver)
                     Container(
                       padding: const EdgeInsets.symmetric(
